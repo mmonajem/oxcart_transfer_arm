@@ -3,6 +3,29 @@ int yValue = 0 ;
 int bValue = 0 ;
 const int Pin=2;
 
+//Motor Configurations
+int driverDirVertical = 6;
+int driverPulVertical = 7;
+
+int driverDirHorizontal = 8;
+int driverPulHorizontal = 9;
+
+//pulse per revolution = steps per revolution
+int PPROfVerticalMotor = 6400; 
+//pulse per revolution = steps per revolution
+int PPROfHorizontalMotor = 6400;
+
+//angle in degrees
+int requiredAngleForVerticalMotor = 45;
+int requiredAngleForHorizontalMotor = 45;
+
+//Current Position of Motor
+
+int currentPosOfVerticalMotorInSteps = 0;
+int currentPosOfHorizontalMotorInSteps = 0;
+int currentPosOfVerticalMotorInDegrees = 0;
+int currentPosOfHorizontalMotorInDegrees = 0;
+
 int sensorState1;
 int sensorState2;
 int sensorState3;
@@ -13,15 +36,14 @@ int sensorTwoPin = 3;
 int sensorThreePin = 4;
 int sensorFourPin = 5;
 
-
-int driverPul = 7;
-int driverDir = 6;
-
 boolean setDir = HIGH;
 boolean setDirUp = HIGH;
 boolean setDirDown = LOW;
 boolean setDirLeft = HIGH;
 boolean setDirRight = LOW;
+
+bool RESET = false;
+
 
 int pd = 200;
 
@@ -30,15 +52,79 @@ int controllerPositionCode = 0;
 
 int millisbetweenSteps = 50;
 
-int numberOfSteps = 800;
+//int numberOfSteps = 800;
 
 int currentState = 10;
 int previousState = 20;
+
+
+int calculateRotationSteps(int ppr,int requiredDegreeRotation)
+{
+  float oneStepToDegrees = (float(360)/float(6400));
+  //Confirm this later. Int or round operation?
+  
+  int numberOfStepsForRequiredDegreeRotation = (requiredDegreeRotation/oneStepToDegrees);
+  Serial.println(numberOfStepsForRequiredDegreeRotation);
+  //return numberOfStepsForRequiredDegreeRotation;
+  
+  
+  }
+
 
 void revMotor(){
   setDir = !setDir;
   }
 
+
+void resetVerticalMotor(){
+  while(digitalRead(sensorTwoPin) != HIGH){
+    //change this to 1 later
+       rotateVerticalMotor(setDirUp);
+    
+    }
+  
+  }
+
+ void resetHorizontalMotor(){
+  while(digitalRead(sensorThreePin)!= HIGH)
+  {
+   
+    rotateHorizontalMotor(setDirLeft);
+         
+  }
+  
+  }
+
+ void initiateReset(){
+  RESET = true;
+  
+  }
+  
+void  resetMotorPosition(){
+
+  //Serial.println("reset called");
+  resetVerticalMotor();
+  resetHorizontalMotor();
+  
+  }
+
+void rotateVerticalMotor(bool dir){
+  digitalWrite(driverDirVertical,dir);
+  digitalWrite(driverPulVertical,HIGH);
+  delayMicroseconds(pd);
+  digitalWrite(driverPulVertical,LOW);
+  delayMicroseconds(pd);
+  
+  }
+
+void rotateHorizontalMotor(bool dir){
+  digitalWrite(driverDirHorizontal,dir);
+  digitalWrite(driverPulHorizontal,HIGH);
+  delayMicroseconds(pd);
+  digitalWrite(driverPulHorizontal,LOW);
+  delayMicroseconds(pd);
+  
+  }
 void setup()  
 { 
   
@@ -47,9 +133,11 @@ void setup()
   pinMode(3, INPUT);
   pinMode(4, INPUT);
   pinMode(5, INPUT);
-  pinMode(driverPul,OUTPUT);
-  pinMode(driverDir,OUTPUT);
-  //attachInterrupt(digitalPinToInterrupt(2),revMotor,RISING);
+  pinMode(driverPulVertical,OUTPUT);
+  pinMode(driverDirVertical,OUTPUT);
+  pinMode(driverPulHorizontal,OUTPUT);
+  pinMode(driverDirHorizontal,OUTPUT);
+  attachInterrupt(digitalPinToInterrupt(2),initiateReset,RISING);
   digitalWrite(8,HIGH); 
   Serial.begin(9600) ;
 } 
@@ -66,15 +154,29 @@ void printResults(int xValue,int yValue){
   
   }
 
-void rotateMotorXDegrees(bool dir)
+void rotateVerticalMotorXDegrees(bool dir,int numberOfSteps)
 {
-  digitalWrite(driverDir,dir);
+  digitalWrite(driverDirVertical,dir);
   for (int n = 0; n < numberOfSteps;n++ )
   {
       
-      digitalWrite(driverPul,HIGH);
+      digitalWrite(driverPulVertical,HIGH);
       delayMicroseconds(pd);
-      digitalWrite(driverPul,LOW);
+      digitalWrite(driverPulVertical,LOW);
+      delayMicroseconds(pd);
+  }
+  
+}
+
+void rotateHorizontalMotorXDegrees(bool dir,int numberOfSteps)
+{
+  digitalWrite(driverDirHorizontal,dir);
+  for (int n = 0; n < numberOfSteps;n++ )
+  {
+      
+      digitalWrite(driverPulHorizontal,HIGH);
+      delayMicroseconds(pd);
+      digitalWrite(driverPulHorizontal,LOW);
       delayMicroseconds(pd);
   }
   
@@ -239,15 +341,20 @@ void decideDirection(int xValue,int yValue)
 
 void readCommand(){
   xValue = analogRead(A0);  
-  yValue = analogRead(A1);  
-  decideDirection(xValue,yValue);
+  yValue = analogRead(A1); 
+  readSensor1();
+  readSensor3(); 
+  //decideDirection(xValue,yValue);
   } 
 
 void driveHorizontalMotorLeft()
 {
   Serial.print("Drive Motor Left");
   Serial.print("\n");
-  rotateMotorXDegrees(setDirLeft);
+  bool dir = setDirLeft;
+  int steps = calculateRotationSteps(PPROfHorizontalMotor,requiredAngleForHorizontalMotor);
+  currentPosOfHorizontalMotorInSteps += steps; 
+  rotateHorizontalMotorXDegrees(dir,steps);
   
 }
 
@@ -255,21 +362,30 @@ void driveHorizontalMotorRight()
 {
   Serial.print("Drive Motor Right");
   Serial.print("\n");
-  rotateMotorXDegrees(setDirRight);
+  bool dir = setDirRight;
+  int steps = calculateRotationSteps(PPROfHorizontalMotor,requiredAngleForHorizontalMotor);
+  currentPosOfHorizontalMotorInSteps -= steps;
+  rotateHorizontalMotorXDegrees(dir,steps);
 }
 
 void driveVerticalMotorUp()
 {
   Serial.print("Drive Motor Up");
   Serial.print("\n");
-  rotateMotorXDegrees(setDirUp);
-  
+  bool dir = setDirUp;
+  int steps = calculateRotationSteps(PPROfVerticalMotor,requiredAngleForVerticalMotor);
+  currentPosOfVerticalMotorInSteps += steps; 
+  rotateVerticalMotorXDegrees(dir,steps);
 }
+  
 void driveVerticalMotorDown()
 {
   Serial.print("Drive Motor Down");
   Serial.print("\n");
-  rotateMotorXDegrees(setDirDown);
+  bool dir = setDirDown;
+  int steps = calculateRotationSteps(PPROfVerticalMotor,requiredAngleForVerticalMotor);
+  currentPosOfVerticalMotorInSteps -= steps; 
+  rotateVerticalMotorXDegrees(dir,steps);
 }
 
 
@@ -300,7 +416,13 @@ void driveMotor(int controllerPositionCode){
 
 void loop() 
 { 
+
+  if (RESET == true){
+    resetMotorPosition();
+    RESET = false;
+    }
   readCommand();
-  delay(100);
+  //rotateMotor(HIGH);
+  delay(1000);
   
 }
