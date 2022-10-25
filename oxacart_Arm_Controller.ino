@@ -31,7 +31,7 @@ int sensorState2;
 int sensorState3;
 int sensorState4;
 
-int sensorOnePin = 2;
+int sensorOnePin = 10;
 int sensorTwoPin = 3;
 int sensorThreePin = 4;
 int sensorFourPin = 5;
@@ -43,6 +43,8 @@ boolean setDirLeft = HIGH;
 boolean setDirRight = LOW;
 
 bool RESET = false;
+
+bool mode = 1;
 
 
 int pd = 200;
@@ -58,14 +60,84 @@ int currentState = 10;
 int previousState = 20;
 
 
+
+void readSerial(){
+  
+  if (Serial.available() > 0 ){
+
+          String msg = Serial.readString();
+
+          if (msg == "LEFT"){
+            Serial.println("LEFT");
+              controllerPositionCode = 1;
+            }
+
+          else if(msg == "RIGHT") {
+            Serial.println("RIGHT");
+            controllerPositionCode = 2;
+
+            }
+
+            else if(msg == "UP") {
+            Serial.println("UP");
+            controllerPositionCode = 3;
+            blinkLed();
+            //driveVerticalMotorUp();
+            }
+
+            else if(msg == "DOWN") {
+                Serial.println("DOWN");
+                controllerPositionCode = 4;
+            
+            }
+
+            else if(msg == "RESET") {
+                Serial.println("RESET");
+                controllerPositionCode = 5;
+                //blinkLed();
+                initiateReset();
+            
+            }
+
+            else if(msg == "GUI") {
+                Serial.println("GUI Mode Set");
+                mode = 0;
+                //blinkLed();
+            
+            }
+
+            else if(msg == "HW") {
+                Serial.println("Joystick Mode Set");
+                mode = 1;
+                //blinkLed();
+                
+            
+            }
+
+            else {
+              Serial.println("Wrong Command");
+              controllerPositionCode = 6;
+              }
+
+           programFlow(controllerPositionCode);
+  
+    
+    }
+
+    else {
+      Serial.println("serial not available");
+      }
+  
+  }
 int calculateRotationSteps(int ppr,int requiredDegreeRotation)
 {
   float oneStepToDegrees = (float(360)/float(6400));
   //Confirm this later. Int or round operation?
   
   int numberOfStepsForRequiredDegreeRotation = (requiredDegreeRotation/oneStepToDegrees);
+  Serial.println("numberOfStepsForRequiredDegreeRotation");
   Serial.println(numberOfStepsForRequiredDegreeRotation);
-  //return numberOfStepsForRequiredDegreeRotation;
+  return numberOfStepsForRequiredDegreeRotation;
   
   
   }
@@ -77,7 +149,7 @@ void revMotor(){
 
 
 void resetVerticalMotor(){
-  while(digitalRead(sensorTwoPin) != HIGH){
+  while(digitalRead(sensorOnePin) != HIGH){
     //change this to 1 later
        rotateVerticalMotor(setDirUp);
     
@@ -137,6 +209,7 @@ void setup()
   pinMode(driverDirVertical,OUTPUT);
   pinMode(driverPulHorizontal,OUTPUT);
   pinMode(driverDirHorizontal,OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
   attachInterrupt(digitalPinToInterrupt(2),initiateReset,RISING);
   digitalWrite(8,HIGH); 
   Serial.begin(9600) ;
@@ -275,16 +348,16 @@ void decideDirection(int xValue,int yValue)
 {
   if(xValue >=550 && xValue <=800 )
   {
-    if(yValue >=500 && yValue <=550)
+    if(yValue >=495 && yValue <=550)
     {
       Serial.print("Rotate Left");
       Serial.print("\n");
       controllerPositionCode = 1;
     } 
   }
-   else if(xValue >=200 && xValue <500 )
+   else if(xValue >=200 && xValue <300 )
    {
-    if(yValue >=500 && yValue <=550)
+    if(yValue >=495 && yValue <=550)
     {
       Serial.print("Rotate Right");
       Serial.print("\n");
@@ -292,9 +365,9 @@ void decideDirection(int xValue,int yValue)
     } 
   }
    
-   else if(yValue >=200 && yValue <500 )
+   else if(yValue >=200 && yValue <300 )
    {
-    if(xValue >=500 && xValue <=550)
+    if(xValue >=490 && xValue <=550)
     {
       Serial.print("Go Up");
       Serial.print("\n");
@@ -342,9 +415,14 @@ void decideDirection(int xValue,int yValue)
 void readCommand(){
   xValue = analogRead(A0);  
   yValue = analogRead(A1); 
+  Serial.println(xValue);
+  Serial.println(yValue);
+
   readSensor1();
-  readSensor3(); 
-  //decideDirection(xValue,yValue);
+  //readSensor2();
+  //readSensor3();
+  //readSensor4(); 
+  decideDirection(xValue,yValue);
   } 
 
 void driveHorizontalMotorLeft()
@@ -374,6 +452,8 @@ void driveVerticalMotorUp()
   Serial.print("\n");
   bool dir = setDirUp;
   int steps = calculateRotationSteps(PPROfVerticalMotor,requiredAngleForVerticalMotor);
+  Serial.println("steps:");
+  Serial.println(steps);
   currentPosOfVerticalMotorInSteps += steps; 
   rotateVerticalMotorXDegrees(dir,steps);
 }
@@ -412,7 +492,12 @@ void driveMotor(int controllerPositionCode){
   }
   }
 
-
+void blinkLed(){
+  digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on 
+  delay(1500);                       // wait for half a second
+  digitalWrite(LED_BUILTIN, LOW);    // turn the LED off 
+  delay(500);
+  }
 
 void loop() 
 { 
@@ -421,8 +506,13 @@ void loop()
     resetMotorPosition();
     RESET = false;
     }
-  readCommand();
-  //rotateMotor(HIGH);
-  delay(1000);
+
+   if (mode == 0){
+    readSerial();
+    }
+   else if(mode == 1) {
+    readCommand();
+    delay(100);
+    }
   
 }
