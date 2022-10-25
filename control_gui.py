@@ -58,10 +58,6 @@ class controlGUI():
         label = Label(self.root,text = "Welcome to the Control Tool",font='Helvetica 18 bold')
         label.pack(pady=10)
     
-    
-
-
-
 
 def main():
     gui = controlGUI()

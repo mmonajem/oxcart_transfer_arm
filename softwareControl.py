@@ -17,9 +17,9 @@ class control:
 
     def setup(self):
         self.serialInst.baudrate = 9600
-        self.serialInst.port = "/dev/cu.usbmodem141201"
+        self.serialInst.port = "/dev/cu.usbmodem141301"
         self.serialInst.open()
 
     def sendCommand(self,command):
         print("COMMAND SENT: ",command)
-        #self.serialInst.write(command.encode('utf-8'))
+        self.serialInst.write(command.encode('utf-8'))
