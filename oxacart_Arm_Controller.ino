@@ -1,7 +1,8 @@
 int xValue = 0 ;
 int yValue = 0 ; 
 int bValue = 0 ;
-const int Pin=2;
+const int buttonPinReset = 2;
+const int buttonPinForContinousMode = 3;
 
 //Motor Configurations
 int driverDirVertical = 6;
@@ -32,18 +33,18 @@ int sensorState3;
 int sensorState4;
 
 int sensorOnePin = 10;
-int sensorTwoPin = 3;
+int sensorTwoPin = 11;
 int sensorThreePin = 4;
 int sensorFourPin = 5;
 
-boolean setDir = HIGH;
+boolean setDir = HIGH;  
 boolean setDirUp = HIGH;
 boolean setDirDown = LOW;
 boolean setDirLeft = HIGH;
 boolean setDirRight = LOW;
 
 bool RESET = false;
-
+bool CONTINIOUS_MODE = false;
 bool mode = 1;
 
 
@@ -171,6 +172,11 @@ void resetVerticalMotor(){
   RESET = true;
   
   }
+
+  void toggleContiniousMode(){
+    CONTINIOUS_MODE = true;
+    Serial.println("Set to continious mode");
+    }
   
 void  resetMotorPosition(){
 
@@ -200,18 +206,24 @@ void rotateHorizontalMotor(bool dir){
 void setup()  
 { 
   
-  pinMode(8,INPUT); 
-  pinMode(2, INPUT);
-  pinMode(3, INPUT);
-  pinMode(4, INPUT);
-  pinMode(5, INPUT);
+  //pinMode(8,INPUT); 
+  pinMode(buttonPinReset, INPUT);
+  pinMode(buttonPinForContinousMode, INPUT);
+  
+  pinMode(sensorOnePin, INPUT);
+  pinMode(sensorTwoPin, INPUT);
+  pinMode(sensorThreePin, INPUT);
+  pinMode(sensorFourPin, INPUT);
+  
   pinMode(driverPulVertical,OUTPUT);
   pinMode(driverDirVertical,OUTPUT);
   pinMode(driverPulHorizontal,OUTPUT);
   pinMode(driverDirHorizontal,OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
-  attachInterrupt(digitalPinToInterrupt(2),initiateReset,RISING);
-  digitalWrite(8,HIGH); 
+  attachInterrupt(digitalPinToInterrupt(buttonPinReset),initiateReset,RISING);
+  attachInterrupt(digitalPinToInterrupt(buttonPinForContinousMode),toggleContiniousMode,RISING);
+
+  //digitalWrite(8,HIGH); 
   Serial.begin(9600) ;
 } 
 
@@ -331,8 +343,14 @@ int readSensor1()
     {
       Serial.print("Drive Motor");
       Serial.print("\n");
+      if (CONTINIOUS_MODE == false){
       driveMotor(controllerPositionCode);
+      }
+
+      else if(CONTINIOUS_MODE == true) {
+        driveMotorInContiniousMode(controllerPositionCode);
         
+        }
     }
     else 
     {
@@ -348,68 +366,79 @@ void decideDirection(int xValue,int yValue)
 {
   if(xValue >=550 && xValue <=800 )
   {
-    if(yValue >=495 && yValue <=550)
-    {
-      Serial.print("Rotate Left");
-      Serial.print("\n");
-      controllerPositionCode = 1;
-    } 
+          if(yValue >=380 && yValue <=550)
+          {
+                  Serial.print("Rotate Left");
+                  Serial.print("\n");
+                  controllerPositionCode = 1;
+          } 
   }
-   else if(xValue >=200 && xValue <300 )
+  else if(xValue >=200 && xValue <300 )
    {
-    if(yValue >=495 && yValue <=550)
-    {
-      Serial.print("Rotate Right");
-      Serial.print("\n");
-      controllerPositionCode = 2;
-    } 
+          if(yValue >=380 && yValue <=550)
+          {
+                  Serial.print("Rotate Right");
+                  Serial.print("\n");
+                  controllerPositionCode = 2;
+          } 
   }
    
    else if(yValue >=200 && yValue <300 )
    {
-    if(xValue >=490 && xValue <=550)
-    {
-      Serial.print("Go Up");
-      Serial.print("\n");
-      controllerPositionCode = 3;
-    } 
-  }
+          if(xValue >=488 && xValue <=550)
+          {
+                  Serial.print("Go Up");
+                  Serial.print("\n");
+                  controllerPositionCode = 3;
+          } 
+   }
 
    else if(yValue >=550 && yValue <=800 )
    { 
-    if(xValue >=500 && xValue <=550)
-    {
-      Serial.print("Go Down");
-      Serial.print("\n");
-      controllerPositionCode = 4;
-
-    } 
-  }
+          if(xValue >=490 && xValue <=550)
+          {
+                  Serial.print("Go Down");
+                  Serial.print("\n");
+                  controllerPositionCode = 4;
+      
+          } 
+   }
 
   else
     {
-    Serial.print("Center Position");
-    Serial.print("\n");
-    controllerPositionCode = 0;
+          Serial.print("Center Position");
+          Serial.print("\n");
+          controllerPositionCode = 0;
     }
     
-    currentState = controllerPositionCode;
-    if (currentState != previousState)
+    if (CONTINIOUS_MODE == false) 
     {
-      Serial.print("Call program flow\n");
+          currentState = controllerPositionCode;
+          if (currentState != previousState)
+          {
+            Serial.print("Call program flow\n");
+            programFlow(controllerPositionCode);
+          }
+          else if(currentState == 0)
+          {
+            Serial.print("\n");
+          }
+          else
+          {
+            Serial.print("Dont hold back the joystick\n");
+            Serial.print("\n");
+          }
+          previousState = currentState;
+    }
+
+    else {
+      Serial.print("Call program flow in CM Mode \n");
       programFlow(controllerPositionCode);
-    }
-    else if(currentState == 0)
-    {
-      Serial.print("\n");
-    }
-    else
-    {
-      Serial.print("Dont hold back the joystick\n");
-      Serial.print("\n");
-    }
+      
+      
+      }
     
-    previousState = currentState;
+    //previousState = currentState;
     }
 
 void readCommand(){
@@ -418,11 +447,19 @@ void readCommand(){
   Serial.println(xValue);
   Serial.println(yValue);
 
-  readSensor1();
-  //readSensor2();
+  //readSensor1();
+  readSensor2();
   //readSensor3();
   //readSensor4(); 
   decideDirection(xValue,yValue);
+  } 
+
+ void readCommandInContiniousMode(){
+   xValue = analogRead(A0);  
+    yValue = analogRead(A1); 
+    Serial.println(xValue);
+    Serial.println(yValue);
+  
   } 
 
 void driveHorizontalMotorLeft()
@@ -492,6 +529,29 @@ void driveMotor(int controllerPositionCode){
   }
   }
 
+void driveMotorInContiniousMode(int controllerPositionCode){
+  switch (controllerPositionCode){
+      case 1:
+        rotateHorizontalMotor(setDirLeft);
+        break;
+      case 2:
+          
+          rotateHorizontalMotor(setDirRight);
+          break;
+      case 3:
+          rotateVerticalMotor(setDirUp);
+          break;
+      case 4:
+          rotateVerticalMotor(setDirDown);
+          break;
+      case 0:
+        Serial.print("No Action \n");
+        break;
+      default:
+        Serial.print("No Action \n");
+        break;
+  }
+  }
 void blinkLed(){
   digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on 
   delay(1500);                       // wait for half a second
@@ -501,18 +561,33 @@ void blinkLed(){
 
 void loop() 
 { 
+ Serial.println("CONT MODE");
+ Serial.println(CONTINIOUS_MODE);
+ /*
+  if (RESET == true)
+  {
+        resetMotorPosition();
+        RESET = false;
+  }
+  if (mode == 0)
+  {
+    
+        readSerial();
+  }
+  else if(mode == 1)
+  {
+    
+      readCommand();
+      delay(100);
+  }
+  */
+  
+  rotateVerticalMotor( HIGH);
 
-  if (RESET == true){
-    resetMotorPosition();
-    RESET = false;
-    }
-
-   if (mode == 0){
-    readSerial();
-    }
-   else if(mode == 1) {
-    readCommand();
-    delay(100);
-    }
+ 
+  
+  
+  //rotateMotor(HIGH);
+  //delay(100);
   
 }
