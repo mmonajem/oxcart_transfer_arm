@@ -1,44 +1,49 @@
+//Library to control the button for toggling GUI/Joystick mode
 #include <avdweb_Switch.h>
+//Joystick X and Y axis variable initialization
 int xValue = 0 ;
 int yValue = 0 ; 
 int bValue = 0 ;
+//Setting Pin Config for 3 buttons(Reset/continious-step/Joystick-GUI mode)
 const int buttonPinReset = 2;
 const int buttonPinForContinousMode = 3;
 const int buttonPinForControlMode = 12;
 
-//Motor Configurations
+//Pin Configurations for Vertical and Horizontal motors
 int driverDirVertical = 6;
 int driverPulVertical = 7;
-
 int driverDirHorizontal = 8;
 int driverPulHorizontal = 9;
+
+// Stepper Motor Parameters
 
 //pulse per revolution = steps per revolution
 int PPROfVerticalMotor = 6400; 
 //pulse per revolution = steps per revolution
 int PPROfHorizontalMotor = 6400;
-
 //angle in degrees
 int requiredAngleForVerticalMotor = 45;
 int requiredAngleForHorizontalMotor = 45;
 
 //Current Position of Motor
-
 int currentPosOfVerticalMotorInSteps = 0;
 int currentPosOfHorizontalMotorInSteps = 0;
 int currentPosOfVerticalMotorInDegrees = 0;
 int currentPosOfHorizontalMotorInDegrees = 0;
 
+// 24v Proximity sensor varibale declartion
 int sensorState1;
 int sensorState2;
 int sensorState3;
 int sensorState4;
 
+//Pin configurations for 4 24v Sensors
 int sensorOnePin = 10;
 int sensorTwoPin = 11;
 int sensorThreePin = 4;
 int sensorFourPin = 5;
 
+//Stepper Motor default direction init
 boolean setDir = HIGH;  
 boolean setDirUp = HIGH;
 boolean setDirDown = LOW;
@@ -50,31 +55,27 @@ boolean setDirRight = LOW;
 bool RESET = false;
 // To toggle between step change or continious change of motor
 bool CONTINIOUS_MODE = false;
-// To change between GUI and Hardware control mode
+// To change between GUI and Hardware control mode (mode = 0 (GUI), mode = 1(Joystick))
 bool mode = 1;
 #define PUSHBUTTON 12
-
+//Phase delay for Stepper motor
 int pd = 200;
 
 // Center Position by default
 int controllerPositionCode = 0;
 
-int millisbetweenSteps = 50;
-
+// State variables init to handle continous press of joystick
 int currentState = 10;
 int previousState = 20;
 
+//GUI/Joystick button init
 Switch button = Switch(PUSHBUTTON);
 
 void setup()  
 { 
-  
-  //pinMode(8,INPUT); 
   pinMode(buttonPinReset, INPUT);
   pinMode(buttonPinForContinousMode, INPUT);
 
-  
-  
   pinMode(sensorOnePin, INPUT);
   pinMode(sensorTwoPin, INPUT);
   pinMode(sensorThreePin, INPUT);
@@ -86,6 +87,7 @@ void setup()
   pinMode(driverDirHorizontal,OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
 
+  //Interupts for reset and continous/step mode change functionality
   attachInterrupt(digitalPinToInterrupt(buttonPinReset),initiateReset,CHANGE);
   attachInterrupt(digitalPinToInterrupt(buttonPinForContinousMode),toggleContiniousMode,FALLING);
 
@@ -93,17 +95,20 @@ void setup()
 } 
 
 void readSerial(){
-  
+  /*
+    This function is used to establish connection between Arduino and
+    PC in GUI mode.
+  */
   if (Serial.available() > 0 )
   {
-
+          // Read serial string from PC
           String msg = Serial.readString();
 
           if (msg == "LEFT")
           {
             Serial.println("LEFT");
-              controllerPositionCode = 1;
-            }
+            controllerPositionCode = 1;
+          }
 
           else if(msg == "RIGHT")
           {
@@ -112,55 +117,61 @@ void readSerial(){
 
           }
 
-            else if(msg == "UP") 
-            {
-              Serial.println("UP");
-              controllerPositionCode = 3;
-            }
+          else if(msg == "UP") 
+          {
+            Serial.println("UP");
+            controllerPositionCode = 3;
+          }
 
-            else if(msg == "DOWN") 
-            {
-                Serial.println("DOWN");
-                controllerPositionCode = 4;
-            }
+          else if(msg == "DOWN") 
+          {
+              Serial.println("DOWN");
+              controllerPositionCode = 4;
+          }
 
-            else if(msg == "RESET")
-            {
-                Serial.println("RESET");
-                controllerPositionCode = 5;
-                initiateReset();
-            }
+          else if(msg == "RESET")
+          {
+              Serial.println("RESET");
+              controllerPositionCode = 5;
+              initiateReset();
+          }
 
-            else if(msg == "GUI") 
-            {
-                Serial.println("GUI Mode Set");
-                mode = 0;
-            
-            }
+          else if(msg == "GUI") 
+          { 
+              // GUI Mode change
+              Serial.println("GUI Mode Set");
+              mode = 0;
+          
+          }
 
-            else if(msg == "HW") 
-            {
-                Serial.println("Joystick Mode Set");
-                mode = 1;
-            }
+          else if(msg == "HW") 
+          {
+            // HW or Joystick mode
+              Serial.println("Joystick Mode Set");
+              mode = 1;
+          }
 
-            else if(msg == "continous") 
-            {
-                Serial.println("Continious Rotation Mode Set");
-                CONTINIOUS_MODE = true;
-            }
-            else if(msg == "step") 
-            {
-                Serial.println("Step Rotation Mode Set");
-                CONTINIOUS_MODE = false;
-            }
+          else if(msg == "continous") 
+          {
+            // Continous mode change
+              Serial.println("Continious Rotation Mode Set");
+              CONTINIOUS_MODE = true;
+          }
+          else if(msg == "step") 
+          {
+              // Step Mode change
+              Serial.println("Step Rotation Mode Set");
+              CONTINIOUS_MODE = false;
+          }
 
-            else 
-            {
-              Serial.println("Wrong Command");
-              controllerPositionCode = 6;
-            }
+          else 
+          {
+            //Any other command apart from above-mentioned ones
+            Serial.println("Wrong Command");
+            controllerPositionCode = 6;
+          }
 
+          // Call the driver motor action function
            programFlow(controllerPositionCode);
   
     
@@ -176,6 +187,11 @@ void readSerial(){
 
 bool safeToProceed()
 {
+  /*
+  This function checks the safety condition for motor action.
+  No motor action should be taken unless sensors black weights
+  are at rest position. The position is given my proximity senor.
+  */
   sensorState2 = readSensor2();
   sensorState4 = readSensor4();
   if (sensorState2 == HIGH && sensorState4 == HIGH )
@@ -190,6 +206,7 @@ bool safeToProceed()
 
 int calculateRotationSteps(int ppr,int requiredDegreeRotation)
 {
+  // Calculate the rotation steps based on motor configurations
   float oneStepToDegrees = (float(360)/float(6400));  
   int numberOfStepsForRequiredDegreeRotation = (requiredDegreeRotation/oneStepToDegrees);
   Serial.println("numberOfStepsForRequiredDegreeRotation");
@@ -199,14 +216,19 @@ int calculateRotationSteps(int ppr,int requiredDegreeRotation)
   
 }
 
+
 void revMotor()
 {
+  // Reverse motor direction
   setDir = !setDir;
 }
 
 
 void resetVerticalMotor()
 {
+  //Triggered when reset button is pressed to reset Vertically
+  // rotating motor
+  
   while(digitalRead(sensorOnePin) != HIGH)
     {
        rotateVerticalMotor(setDirUp);
@@ -217,6 +239,8 @@ void resetVerticalMotor()
 
 void resetHorizontalMotor()
 {
+  //Triggered when reset button is pressed to reset Horizontally
+  // rotating motor
   while(digitalRead(sensorThreePin)!= HIGH)
   {
    
@@ -228,6 +252,7 @@ void resetHorizontalMotor()
 
 void initiateReset()
 {
+  // Triggered when reset button is pressed. Sets RESET flag. 
   if (safeToProceed() == true)
   {
     RESET = true;
@@ -236,12 +261,12 @@ void initiateReset()
 
 void toggleContiniousMode()
 {
+  // Toggle continous mode flag
     CONTINIOUS_MODE = !CONTINIOUS_MODE;
 }
   
 void  resetMotorPosition()
 {
-
   resetVerticalMotor();
   resetHorizontalMotor();
   
@@ -267,13 +292,13 @@ void rotateHorizontalMotor(bool dir)
   
 }
 
-
 void rotateVerticalMotorXDegrees(bool dir,int numberOfSteps)
 {
+  // Utilized in Step mode. Rotates vertical motor X degrees.
+  // X can be configured.
   digitalWrite(driverDirVertical,dir);
   for (int n = 0; n < numberOfSteps;n++ )
   {
-      
       digitalWrite(driverPulVertical,HIGH);
       delayMicroseconds(pd);
       digitalWrite(driverPulVertical,LOW);
@@ -284,6 +309,8 @@ void rotateVerticalMotorXDegrees(bool dir,int numberOfSteps)
 
 void rotateHorizontalMotorXDegrees(bool dir,int numberOfSteps)
 {
+  // Utilized in Step mode. Rotates horizontal motor X degrees.
+  // X can be configured.
   digitalWrite(driverDirHorizontal,dir);
   for (int n = 0; n < numberOfSteps;n++ )
   {
@@ -301,20 +328,6 @@ int readSensor1()
 {
     // Vertical Sensor
     int sensorValue = digitalRead(sensorOnePin);
-    if(sensorValue==LOW)
-    { 
-      // if (DEBUG == true) 
-      // {
-      //   Serial.println("No Object detected by Sensor 1");
-      // }
-    }
-    else
-    {
-      // if (DEBUG == true) 
-      // {
-      //   Serial.println("Object Detected by Sensor 1");
-      // }
-    }
     return sensorValue;
 
 }
@@ -323,14 +336,6 @@ int readSensor2()
 {
   //Green - 2 Vertical Precondition
   int sensorValue = digitalRead(sensorTwoPin);
-  if(sensorValue==LOW) 
-  {  
-    //Serial.println("No Object detected by Sensor 2");
-  }
-  else
-  {
-    //Serial.println("Object Detected by Sensor 2");
-  }
   return sensorValue;
 
 }
@@ -339,20 +344,6 @@ int readSensor3()
 {
     // Rotation Sensor
     int sensorValue = digitalRead(sensorThreePin);
-    if(sensorValue==LOW)
-    {  
-      // if (DEBUG == true) 
-      // {
-      //   Serial.println("No Object detected by Sensor 3");
-      // }
-    }
-    else
-    { 
-      // if (DEBUG == true)
-      // {
-      //   Serial.println("Object Detected by Sensor 3");
-      // }
-    }
     return sensorValue;
 }
 
@@ -361,70 +352,34 @@ int readSensor3()
   {
     //Green - 4 Horizontal Precondition   
     int sensorValue = digitalRead(sensorFourPin);
-    if(sensorValue==LOW)
-    {  
-      // if (DEBUG == true) 
-      // {
-      //   Serial.println("No Object detected by Sensor 4");
-      // }
-    }
-    else
-    {
-      // if (DEBUG == true) 
-      // {
-      
-      //   Serial.println("Object Detected by Sensor 4");
-      // }
-    }
     return sensorValue;
 
   }
   
-
  void programFlow(int controllerPositionCode)
  {
-    //confirm which sensors are initial state sensors
-   
+    // Drive motor functionality
     if (safeToProceed() == true)
     {
-      // if (DEBUG == true) 
-      // {
-      //   Serial.println("Drive Motor");
-      // }
       if (CONTINIOUS_MODE == false)
       {
         driveMotor(controllerPositionCode);
       }
-
       else if(CONTINIOUS_MODE == true) 
       {
         driveMotorInContiniousMode(controllerPositionCode);
         
       }
     }
-    else 
-    {
-      // if (DEBUG == true)
-      // {
-      //   Serial.println("Not Safe do not proceed");
-      // }
-
-    }
-
-  
-  
   }
 void decideDirection(int xValue,int yValue)
 {
+  // This function decides the direction of the joystick
+  // using xVlaue(X-axis) and yValue(Y-axis)
   if(xValue >=550 && xValue <=800 )
   {
           if(yValue  >=380 && yValue <=550)
           {
-                // if (DEBUG == true) 
-                // {
-                //   Serial.print("Rotate Left");
-                //   Serial.print("\n");
-                // }
                 controllerPositionCode = 1;
           } 
   }
@@ -432,12 +387,6 @@ void decideDirection(int xValue,int yValue)
   {
           if(yValue >=380 && yValue <=550)
           {       
-                // if (DEBUG == true) 
-                // {
-                //   Serial.print("Rotate Right");
-                //   Serial.print("\n");
-                  
-                // }
                 controllerPositionCode = 2;
           } 
   }
@@ -445,13 +394,7 @@ void decideDirection(int xValue,int yValue)
   else if(yValue >=200 && yValue <300 )
   {
           if(xValue >=488 && xValue <=550)
-          {
-                // if (DEBUG == true) 
-                // {
-                //   Serial.print("Go Up");
-                //   Serial.print("\n");
-                  
-                // }
+          {  
                 controllerPositionCode = 3;
           } 
   }
@@ -460,23 +403,12 @@ void decideDirection(int xValue,int yValue)
   { 
           if(xValue >=490 && xValue <=550)
           {
-                // if (DEBUG == true) 
-                // {
-                //     Serial.println("Go Down");
-                // }
                 controllerPositionCode = 4;
-
-      
           } 
    }
 
   else
   {
-        // if (DEBUG == true) 
-        // {
-        //   Serial.println("Center Position");
-          
-        // }
         controllerPositionCode = 0;
     }
     
@@ -485,10 +417,6 @@ void decideDirection(int xValue,int yValue)
         currentState = controllerPositionCode;
         if (currentState != previousState)
         {
-          // if (DEBUG == true) 
-          // {
-          //   Serial.print("Call program flow\n");
-          // }
           programFlow(controllerPositionCode);
         }
         else if(currentState == 0)
@@ -503,10 +431,6 @@ void decideDirection(int xValue,int yValue)
   }
 
   else {
-    // if (DEBUG == true) 
-    // {
-    //   Serial.print("Call program flow in CM Mode \n");
-    // }
     programFlow(controllerPositionCode);
     
     
@@ -515,23 +439,15 @@ void decideDirection(int xValue,int yValue)
 }
 
 void readCommand(){
+  // Read command from Joystick
   xValue = analogRead(A0);  
   yValue = analogRead(A1);
-  // if (DEBUG == true) 
-  // { 
-  //   Serial.println(xValue);
-  //   Serial.println(yValue);
-  // }
   decideDirection(xValue,yValue);
   } 
 
 
 void driveHorizontalMotorLeft()
 {
-  // if (DEBUG == true) 
-  // {
-  //   Serial.println("Drive Motor Left");
-  // }
   bool dir = setDirLeft;
   int steps = calculateRotationSteps(PPROfHorizontalMotor,requiredAngleForHorizontalMotor);
   currentPosOfHorizontalMotorInSteps += steps; 
@@ -541,10 +457,6 @@ void driveHorizontalMotorLeft()
 
 void driveHorizontalMotorRight()
 {
-  // if (DEBUG == true) 
-  // {
-  //   Serial.println("Drive Motor RIGHT");
-  // }
   bool dir = setDirRight;
   int steps = calculateRotationSteps(PPROfHorizontalMotor,requiredAngleForHorizontalMotor);
   currentPosOfHorizontalMotorInSteps -= steps;
@@ -553,24 +465,14 @@ void driveHorizontalMotorRight()
 
 void driveVerticalMotorUp()
 {
-  // if (DEBUG == true) 
-  // {
-  //   Serial.println("Drive Motor UP");
-  // }
   bool dir = setDirUp;
   int steps = calculateRotationSteps(PPROfVerticalMotor,requiredAngleForVerticalMotor);
-  Serial.println("steps:");
-  Serial.println(steps);
   currentPosOfVerticalMotorInSteps += steps; 
   rotateVerticalMotorXDegrees(dir,steps);
 }
   
 void driveVerticalMotorDown()
 {
-  // if (DEBUG == true) 
-  // {
-  //   Serial.println("Drive Motor DOWN");
-  // }
   bool dir = setDirDown;
   int steps = calculateRotationSteps(PPROfVerticalMotor,requiredAngleForVerticalMotor);
   currentPosOfVerticalMotorInSteps -= steps; 
@@ -579,6 +481,10 @@ void driveVerticalMotorDown()
 
 
 void driveMotor(int controllerPositionCode){
+  /* 
+    Control block function for calling corresponding function
+    for driving the motor in step mode.
+  */
   switch (controllerPositionCode){
       case 1:
         driveHorizontalMotorLeft();
@@ -602,12 +508,15 @@ void driveMotor(int controllerPositionCode){
   }
 
 void driveMotorInContiniousMode(int controllerPositionCode){
+  /* 
+    Control block function for calling corresponding function
+    for driving the motor in continious mode.
+  */
   switch (controllerPositionCode){
       case 1:
         rotateHorizontalMotor(setDirLeft);
         break;
       case 2:
-          
           rotateHorizontalMotor(setDirRight);
           break;
       case 3:
@@ -678,6 +587,15 @@ boolean checkDirectionDown(int xValue, int yValue)
 
 void controlMotorThroughJoystick()
 {
+  /* This function rotates the vertical and horizontal motor
+  based joystick input. 
+
+  Joystick Input:
+    Left: Rotate Horizontal Motor Left
+    Right: Rotate Horizontal Motor Right
+    Up: Rotate Vertical Motor Up
+    Down: Rotate Vertical Motor Down
+  */
   xValue = analogRead(A0);  
   yValue = analogRead(A1);
   if (checkDirectionLeft(xValue,yValue) == true)
@@ -719,16 +637,16 @@ void loop()
   {
     mode = !mode;
   }
- 
   if (RESET == true)
   {
-        resetMotorPosition();
-        RESET = false;
+      // RESET 
+      resetMotorPosition();
+      RESET = false;
   }
   if (mode == 0)
   {
-    
-        readSerial();
+    //GUI Mode
+    readSerial();
   }
   else if(mode == 1)
   {
